@@ -1,0 +1,620 @@
+package model;
+
+
+import java.util.Iterator;
+import java.util.Vector;
+
+import java.awt.Color;
+
+import java_cup.runtime.* ;
+import java.io.InputStream ;
+
+import editor.Editor;
+import model.Transform;
+import model.Point;
+import model.Transform;
+import matrix.Matrix;
+
+/*  
+	parser constructor to paste in ModelFile.java
+	public parser(FileInputStream fs) {super(new Lexer(fs));} 
+*/
+
+/* Preliminaries to set up and use the scanner. */
+init with {: /* non need to init anything */ :};
+scan with {: return getScanner().next_token(); :};
+
+/* Terminals (tokens returned by the scanner). */
+terminal           BLOCK_BEGIN, BLOCK_END, ARRAY_BEGIN, ARRAY_END, NAME, MODEL, BOX, DISK, TORUS, SPHERE, CYLINDER, CONE, PYRAMID, TETRAHEDRON, ROTATION, TRANSLATION, COMPOSITION, SCALING, ADD_CHILDREN, REMOVE_CHILDREN, COMA, HOME, COLOR, ANGLE, RADIUS, WIDTH, HEIGHT, DEPTH, MOVE_DELTA, SCALE_DELTA, POLYGONS, CHILDREN, TRANSFORMS, POINT, TRANSFORMATION_MATRIX, DOUBLE ;
+terminal Integer   INTEGER ;
+
+/* Non-terminals */
+non terminal            Model, 
+						ModelList,
+					    ModelDescription, 
+					    Children, 
+					    FreeDescription, 
+					    BoxDescription,
+					    DiskDescription,
+					    TorusDescription,
+					    SphereDescription,
+					    CylinderDescription,
+					    ConeDescription,
+					    PyramidDescription,
+					    TetrahedronDescription,
+					    Transform,
+					    Transforms,
+					    TransformList,
+					    TransformDescription,
+					    RotationDescription,
+					    TranslationDescription,
+					    ScalingDescription,
+					    CompositionDescription,
+					    ReparentDescription,
+					    Color,
+					    Home,
+					    Angle,
+					    Transformation,
+					    Polygon,
+					    Polygons,
+					    Points,
+					    Point,
+					    Triplet,
+					    NameList,
+					    MoveDelta,
+					   	NameListBlock,
+					   	ScaleDelta,
+					   	Matrix,
+					   	MatrixLine ;
+
+non terminal Integer    Width,
+					    Height,
+					    Depth,
+					    Radius ;
+
+/* The grammar */
+Model 	::= BLOCK_BEGIN ModelDescription:_m Children:_c Transformation:_rs Transforms:_t BLOCK_END 
+				{: 
+					Model 	m = (Model)_m;
+					Vector	c = (Vector)_c;
+					Vector  t = (Vector)_t;
+					
+					// add the new model to the editor
+					Editor.editor.getModels().add(m);
+					
+					// #### debug
+					System.out.println("added model " + m.getName() + " to the editor");
+					
+					// add the children to the new model 
+					Iterator i = c.iterator(); 
+					while (i.hasNext()) {
+						Model child = (Model)i.next();
+						m.addChild(child);
+
+						Editor.editor.getModels().remove(child);
+					}
+					
+					// apply transformations to the model
+					((Model)_m).setTransformation((Matrix)_rs); 
+
+					// transform the model or its descendence
+					i = t.iterator();
+					while (i.hasNext()) {
+						Transform.TransformAction transform = (Transform.TransformAction)i.next();
+						transform.apply(m);
+					}
+					
+					RESULT = m;
+				:} | 
+			BLOCK_BEGIN ModelDescription:_m Children:_c Transformation:_rs BLOCK_END
+				{: 
+					Model 	m = (Model)_m;
+					Vector	c = (Vector)_c;
+
+					// add the new model to the editor
+					Editor.editor.getModels().add(m);
+					
+					// #### debug
+					System.out.println("added model " + m.getName() + " to the editor");
+
+					// add the children to the new model 
+					Iterator i = c.iterator(); 
+					while (i.hasNext()) {
+						Model child = (Model)i.next();
+						m.addChild(child);
+						Editor.editor.getModels().remove(child);
+					}
+
+					// apply transformations to the model
+					((Model)_m).setTransformation((Matrix)_rs); 
+
+					RESULT = m;
+				:} | 
+			BLOCK_BEGIN ModelDescription:_m Transformation:_rs Transforms:_t BLOCK_END
+				{: 
+					Model 	m = (Model)_m;
+					Vector  t = (Vector)_t;
+
+					// apply transformations to the model
+					((Model)_m).setTransformation((Matrix)_rs); 
+
+					// add the new model to the editor
+					Editor.editor.getModels().add(m);
+					
+					// #### debug
+					System.out.println("added model " + m.getName() + " to the editor");
+
+					// transform the model or its descendence
+					Iterator i = t.iterator();
+					while (i.hasNext()) {
+						Transform.TransformAction transform = (Transform.TransformAction)i.next();
+						transform.apply(m);
+					}
+
+					RESULT = m;
+				:} | 
+			BLOCK_BEGIN ModelDescription:_m Transformation:_rs BLOCK_END 
+				{: 
+					Model 	m = (Model)_m;
+
+					// apply transformations to the model
+					((Model)_m).setTransformation((Matrix)_rs); 
+
+					// add the new model to the editor
+					Editor.editor.getModels().add(m);
+
+					// #### debug
+					System.out.println("added model " + m.getName() + " to the editor");
+
+					RESULT = m;
+				:} ;
+
+ModelDescription ::= FreeDescription:_m 
+						{:RESULT = _m;:} |
+        			 BoxDescription:_m 
+						{:RESULT = _m;:} |
+        			 DiskDescription:_m 
+						{:RESULT = _m;:} |
+        			 TorusDescription:_m 
+						{:RESULT = _m;:} |
+        			 SphereDescription:_m
+						{:RESULT = _m;:} |
+        			 ConeDescription:_m 
+						{:RESULT = _m;:} |
+       				 CylinderDescription:_m
+						{:RESULT = _m;:} |
+        			 PyramidDescription:_m 
+						{:RESULT = _m;:} |
+        			 TetrahedronDescription:_m 
+						{:RESULT = _m;:} ;
+        			 
+Children		::=  BLOCK_BEGIN CHILDREN ModelList:_l BLOCK_END 
+						{:RESULT = _l;:} ;
+
+ModelList	::= 		Model:_m 
+						{:
+							RESULT = new Vector();
+							((Vector)RESULT).add(_m);
+						:} |
+						ModelList:_l COMA Model:_m
+						{:
+							// the vector has been instantiated by the trailing model
+							((Vector)_l).add(_m);
+							RESULT = _l;
+						:} ;
+					 
+Transforms 		::=  BLOCK_BEGIN TRANSFORMS TransformList:_l BLOCK_END
+						{:RESULT = _l;:} ;
+
+TransformList	::=  Transform:_t 
+						{:
+							RESULT = new Vector();
+							((Vector)RESULT).add(_t);
+						:} |
+					 TransformList:_l COMA Transform:_t
+						{:
+							// the vector has been instantiated by the trailing transform
+							((Vector)_l).add(_t);
+							RESULT = _l;
+						:} ;
+
+Transform	 	::= BLOCK_BEGIN TransformDescription:_t BLOCK_END 
+						{:RESULT = _t;:} ;
+
+TransformDescription ::= RotationDescription:_t 
+							{:RESULT = _t;:} |
+	  				     TranslationDescription:_t 
+							{:RESULT = _t;:} |
+	  				     CompositionDescription:_t 
+							{:RESULT = _t;:} |
+	  				     ScalingDescription:_t
+							{:RESULT = _t;:} |
+	  				     ReparentDescription:_t 
+							{:RESULT = _t;:} ;
+
+FreeDescription 		::=	MODEL NAME:_n Color:_c Home:_p BLOCK_BEGIN POLYGONS Polygons:_poly BLOCK_END 
+							{:
+								Model m = new Model((Color)_c);
+								m.setHome((Point)_p);
+								m.setColor((Color)_c);
+								m.setName(new String((String)_n));
+								Iterator i = ((Vector)_poly).iterator();
+								while (i.hasNext()) {
+									Point []polygon = (Point[])i.next();
+									m.addPolygon(polygon);
+								}
+								RESULT = m;
+							:} ;
+							
+BoxDescription			::= BOX NAME:_n Color:_c Home:_p Width:_w Height:_h Depth:_d 
+							{:
+								Integer w = (Integer)_w, 
+										h = (Integer)_h, 
+										d = (Integer)_d;
+								Box m = new Box(w.intValue(), h.intValue(), d.intValue());
+								m.setHome((Point)_p);
+								m.setColor((Color)_c);
+								m.setName(new String((String)_n));
+
+								// #### debug
+								System.out.println("created box " + m.getName());
+
+								RESULT = m;
+							:} ;
+							
+DiskDescription			::= DISK NAME:_n Color:_c Home:_p Radius:_r 
+							{:
+								Integer r = (Integer)_r;
+								Disk m = new Disk(r.intValue() * 2);
+								m.setHome((Point)_p);
+								m.setColor((Color)_c);
+								m.setName(new String((String)_n));
+
+								// #### debug
+								System.out.println("created disk " + m.getName());
+
+								RESULT = m;
+							:} ;
+
+TorusDescription			::= TORUS NAME:_n Color:_c Home:_p Radius:_r 
+							{:
+								Integer r = (Integer)_r;
+								Torus m = new Torus(r.intValue() * 2);
+								m.setHome((Point)_p);
+								m.setColor((Color)_c);
+								m.setName(new String((String)_n));
+
+								// #### debug
+								System.out.println("created torus " + m.getName());
+
+								RESULT = m;
+							:} ;
+
+SphereDescription		::= SPHERE NAME:_n Color:_c Home:_p Radius:_r 
+							{:
+								Integer r = (Integer)_r;
+								Sphere m = new Sphere(r.intValue() * 2);
+								m.setHome((Point)_p);
+								m.setColor((Color)_c);
+								m.setName(new String((String)_n));
+
+								// #### debug
+								System.out.println("created sphere " + m.getName());
+
+								RESULT = m;
+							:} ;
+							
+ConeDescription			::= CONE NAME:_n Color:_c Home:_p Radius:_r Height:_h 
+							{:
+								Integer r = (Integer)_r,
+										h = (Integer)_h;
+								
+								Cone m = new Cone(r.intValue() * 2, h.intValue());
+								m.setHome((Point)_p);
+								m.setColor((Color)_c);
+								m.setName(new String((String)_n));
+
+								// #### debug
+								System.out.println("created cone " + m.getName());
+
+								RESULT = m;
+							:} ;
+							
+CylinderDescription			::= CYLINDER NAME:_n Color:_c Home:_p Radius:_r Height:_h 
+							{:
+								Integer r = (Integer)_r,
+										h = (Integer)_h;
+								
+								Cylinder m = new Cylinder(r.intValue() * 2, h.intValue());
+								m.setHome((Point)_p);
+								m.setColor((Color)_c);
+								m.setName(new String((String)_n));
+
+								// #### debug
+								System.out.println("created cylinder " + m.getName());
+
+								RESULT = m;
+							:} ;
+							
+PyramidDescription		::= PYRAMID NAME:_n Color:_c Home:_p Radius:_r Height:_h 
+							{:
+								Integer r = (Integer)_r,
+										h = (Integer)_h;
+								
+								Pyramid m = new Pyramid(r.intValue() * 2, h.intValue());
+								m.setHome((Point)_p);
+								m.setColor((Color)_c);
+								m.setName(new String((String)_n));
+
+								// #### debug
+								System.out.println("created pyramid " + m.getName());
+
+								RESULT = m;
+							:} ;
+							
+TetrahedronDescription	::= TETRAHEDRON NAME:_n Color:_c Home:_p Radius:_r Height:_h 
+							{:
+								Integer r = (Integer)_r,
+										h = (Integer)_h;
+								
+								Tetrahedron m = new Tetrahedron(r.intValue() * 2, h.intValue());
+								m.setHome((Point)_p);
+								m.setColor((Color)_c);
+								m.setName(new String((String)_n));
+
+								// #### debug
+								System.out.println("created tetrahedron " + m.getName());
+
+								RESULT = m;
+							:} ;
+
+Polygons				::= Polygon:_array 
+							{:
+								RESULT = new Vector();
+								((Vector)RESULT).add(_array);
+							:} |
+					    	Polygons:_vector COMA Polygon:_array
+							{:
+								// the vector has been instantiated by the trailing points array
+								((Vector)_vector).add(_array);
+								RESULT = _vector;
+							:} ;
+
+Transformation				::= BLOCK_BEGIN TRANSFORMATION_MATRIX Matrix:_m BLOCK_END 
+							{:
+								RESULT = _m;
+							:} ;
+
+Matrix					::= ARRAY_BEGIN MatrixLine:_l1 COMA MatrixLine:_l2 COMA MatrixLine:_l3 ARRAY_END
+							{:
+								// create a matrix of points
+								Matrix m = new Matrix(3, 3);
+								m.getValues()[0][0] = ((double[])_l1)[0];
+								m.getValues()[0][1] = ((double[])_l1)[1];
+								m.getValues()[0][2] = ((double[])_l1)[2];
+								m.getValues()[1][0] = ((double[])_l2)[0];
+								m.getValues()[1][1] = ((double[])_l2)[1];
+								m.getValues()[1][2] = ((double[])_l2)[2];
+								m.getValues()[2][0] = ((double[])_l3)[0];
+								m.getValues()[2][1] = ((double[])_l3)[1];
+								m.getValues()[2][2] = ((double[])_l3)[2];
+								
+								RESULT = m;
+							:} ;
+
+MatrixLine				::= ARRAY_BEGIN DOUBLE:_d1 COMA DOUBLE:_d2 COMA DOUBLE:_d3 ARRAY_END 
+							{:
+								double a[] = new double[3];
+							
+								a[0] = ((Double)_d1).doubleValue();
+								a[1] = ((Double)_d2).doubleValue();
+								a[2] = ((Double)_d3).doubleValue();
+								
+								RESULT = a;
+							:} ;
+
+Polygon					::= ARRAY_BEGIN Points:_vector ARRAY_END 
+							{:
+								// create an array of points
+								Point []p = new Point[((Vector)_vector).size()];
+								for (int i = 0; i < p.length; i++) {
+									p[i] = (Point)((Vector)_vector).elementAt(i);
+								}								
+								
+								RESULT = p;
+							:} ;
+
+Points					::= Point:_p
+							{:
+								RESULT = new Vector();
+								((Vector)RESULT).add(_p);
+							:} |
+						 	Points:_vector COMA Point:_p
+							{:
+								// the vector has been instantiated by the trailing point
+								((Vector)_vector).add(_p);
+								RESULT = _vector;
+							:} ;
+
+Point			::= BLOCK_BEGIN POINT Triplet:_t BLOCK_END
+						{: 
+							// #### debug
+							Point p = (Point)_t;
+							System.out.println("found point: " + new Float(p.getX()).toString() + ", " + new Float(p.getY()).toString() + ", " + new Float(p.getZ()).toString());
+
+							RESULT = _t;
+						:} ;
+
+MoveDelta		::= BLOCK_BEGIN MOVE_DELTA Triplet:_t BLOCK_END 
+						{: 
+							// #### debug
+							Point p = (Point)_t;
+							System.out.println("found move delta: " + new Float(p.getX()).toString() + ", " + new Float(p.getY()).toString() + ", " + new Float(p.getZ()).toString());
+
+							RESULT = _t;
+						:} ;
+						
+ScaleDelta		::= BLOCK_BEGIN SCALE_DELTA Triplet:_t BLOCK_END
+						{: 
+							// #### debug
+							Point p = (Point)_t;
+							System.out.println("found scale delta: " + new Float(p.getX()).toString() + ", " + new Float(p.getY()).toString() + ", " + new Float(p.getZ()).toString());
+
+							RESULT = _t;
+						:} ;
+						
+Home			::= BLOCK_BEGIN HOME Triplet:_t BLOCK_END 
+						{: 
+							// #### debug
+							Point p = (Point)_t;
+							System.out.println("found home: " + new Float(p.getX()).toString() + ", " + new Float(p.getY()).toString() + ", " + new Float(p.getZ()).toString());
+
+							RESULT = _t;
+						:} ;
+						
+Angle			::= BLOCK_BEGIN ANGLE Triplet:_t BLOCK_END 
+						{: 
+							// #### debug
+							Point p = (Point)_t;
+							System.out.println("found angle: " + new Float(p.getX()).toString() + ", " + new Float(p.getY()).toString() + ", " + new Float(p.getZ()).toString());
+							
+							RESULT = _t;
+						:} ;
+						
+Color			::= BLOCK_BEGIN COLOR Triplet:_t BLOCK_END 
+						{: 
+							Point p = (Point)_t;
+							Color c = new Color((int)p.getX(), (int)p.getY(), (int)p.getZ());
+
+							// #### debug
+							System.out.println("found color: " + new Float(p.getX()).toString() + ", " + new Float(p.getY()).toString() + ", " + new Float(p.getZ()).toString());
+
+							RESULT = c;
+						:} ;
+
+Triplet			::= DOUBLE:_n1 COMA DOUBLE:_n2 COMA DOUBLE:_n3 
+						{:
+							// #### debug
+							System.out.println("found Triplet: " + _n1.toString() + ", " + _n2.toString() + ", " + _n3.toString());
+						
+							RESULT = new Point(((Double)_n1).doubleValue(), ((Double)_n2).doubleValue(), ((Double)_n3).doubleValue());
+						:} |
+					INTEGER:_n1 COMA INTEGER:_n2 COMA INTEGER:_n3 
+						{:
+							// #### debug
+							System.out.println("found Triplet: " + _n1.toString() + ", " + _n2.toString() + ", " + _n3.toString());
+						
+							RESULT = new Point(((Integer)_n1).intValue(), ((Integer)_n2).intValue(), ((Integer)_n3).intValue());
+						:} ;
+						
+Radius			::= BLOCK_BEGIN RADIUS INTEGER:_n BLOCK_END
+						{:
+							// #### debug
+							System.out.println("found radius: " + _n.toString());
+
+							RESULT = _n;
+						:} ;
+						
+Width			::= BLOCK_BEGIN WIDTH INTEGER:_n BLOCK_END
+						{:
+							// #### debug
+							System.out.println("found width: " + _n.toString());
+
+							RESULT = _n;
+						:} ;
+						
+Height			::= BLOCK_BEGIN HEIGHT INTEGER:_n BLOCK_END
+						{:
+							// #### debug
+							System.out.println("found height: " + _n.toString());
+
+							RESULT = _n;
+						:};
+						
+Depth			::= BLOCK_BEGIN DEPTH INTEGER:_n BLOCK_END 
+						{:
+							// #### debug
+							System.out.println("found depth: " + _n.toString());
+						
+							RESULT = _n;
+						:};
+
+RotationDescription 	::= ROTATION NAME:_n Angle:_a
+							{:
+								Transform t = new Transform();
+								RESULT = t.new Rotation((String)_n, (Point)_a);
+							:} |
+							ROTATION Angle:_a
+							{:
+								Transform t = new Transform();
+								RESULT = t.new Rotation((Point)_a);
+							:} ;
+							
+TranslationDescription 	::= TRANSLATION NAME:_n MoveDelta:_d
+							{:
+								Transform t = new Transform();
+								RESULT = t.new Translation((String)_n, (Point)_d);
+							:} |
+							TRANSLATION MoveDelta:_d
+							{:
+								Transform t = new Transform();
+								RESULT = t.new Translation((Point)_d);
+							:} ;
+							
+ScalingDescription 		::= SCALING NAME:_n ScaleDelta:_d
+							{:
+								Transform t = new Transform();
+								RESULT = t.new Scaling((String)_n, (Point)_d);
+							:} |
+							SCALING ScaleDelta:_d
+							{:
+								Transform t = new Transform();
+								RESULT = t.new Scaling((Point)_d);
+							:} ;
+							
+CompositionDescription 	::= COMPOSITION NAME:_n NameListBlock:_l
+							{:
+								Transform t = new Transform();
+								RESULT = t.new Composition((String)_n, (Vector)_l);
+							:} |
+							COMPOSITION NameListBlock:_l
+							{:
+								Transform t = new Transform();
+								RESULT = t.new Composition((Vector)_l);
+							:} ;
+
+ReparentDescription 	::= ADD_CHILDREN NAME:_n NameListBlock:_l
+							{:
+								Transform t = new Transform();
+								RESULT = t.new AddChildren((String)_n, (Vector)_l);
+							:} |
+							ADD_CHILDREN NameListBlock:_l
+							{:
+								Transform t = new Transform();
+								RESULT = t.new AddChildren((Vector)_l);
+							:} |
+							REMOVE_CHILDREN NAME:_n NameListBlock:_l
+							{:
+								Transform t = new Transform();
+								RESULT = t.new RemoveChildren((String)_n, (Vector)_l);
+							:} |
+							REMOVE_CHILDREN NameListBlock:_l
+							{:
+								Transform t = new Transform();
+								RESULT = t.new RemoveChildren((Vector)_l);
+							:} ;
+
+NameListBlock			::= ARRAY_BEGIN NameList:_l ARRAY_END 
+							{:RESULT=_l;:} ;
+NameList				::= NAME:_n
+							{:
+								RESULT = new Vector();
+								((Vector)RESULT).add(_n);
+							:} |
+							NameList:_l COMA NAME:_n
+							{:
+								// the vector has been instantiated by the trailing name
+								((Vector)_l).add(_n);
+								RESULT = _l;
+							:} ;
+       			 

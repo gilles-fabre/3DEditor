@@ -1,0 +1,14 @@
+Todo:
+
+	fix: scaling of embedded objects is screwed by save/load operations
+	
+	add: about
+	add: selection box (select points in Rendering View)
+		distord selection...	 
+		translate selection...
+		rotate selection...
+	add: texture mapping
+	fix: size attributes (width, height, etc) conflict with scaling when saving/loading model
+	
+
+		
